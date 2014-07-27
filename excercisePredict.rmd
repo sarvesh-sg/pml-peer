@@ -1,0 +1,110 @@
+---
+title: "Weight Lifting Excercise"
+author: "Sarvesh S G"
+date: "Sunday 27 July 2014"
+output: html_document
+---
+
+This is an analysis report. This report analyses the data set  <http://groupware.les.inf.puc-rio.br/har.>. We analyse the data set to predict "classe" which represent one of the 5 ways the participant performed the excercise.
+
+Step 1:
+---
+Processing the data:
+We load the training data set from <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>. On cursory look at the data we observe the data contains NA values, empty values and divide by zero errors. we constrain the read.csv function to mark each on these as NA.
+
+```{r}
+training <- read.csv("pml-training.csv", na.strings = c("NA","#DIV/0!",""))
+```
+
+Further on loading, we remove the columns that contain NA values to reduce the number of features. next we remove features that do not seem to make any impact on the outcome i,e the excersie patter.
+
+```{r}
+training <- training[, which(as.numeric(colSums(is.na(training)))==0)]
+trainSubSet <- training[,8:ncol(training)]
+````
+
+Step 2:
+---
+In this step we perform analysis using random forest algorithm on the processed data set.
+to calculate accuracy and out of sample error, we spilt the training data into training and test set further, this is because the original test data set does not contain the predict variable classe
+```{r}
+library(lattice)
+library(ggplot2)
+library(caret)
+inTrain <- createDataPartition(y=trainSubSet$classe,p=0.03, list=FALSE)
+training1 <- trainSubSet[inTrain,]
+testing1 <- trainSubSet[-inTrain,]
+model <- train(classe ~ ., data = training1, method = "rf")
+confusionMatrix(testing1$classe,predict(model,testing1))
+````
+
+Cross validation happens internally,Below is the function that generates the error rate against number of predictor variables used in randon forest algorithm.
+
+```{r}
+result <- rfcv(training1, training1$classe,cv.fold=5,step=0.5)
+with(result, plot(n.var, error.cv,  log="x",type="o", lwd=2))
+```
+
+Cross validation in Random Forest:
+---
+It is important to note that due to the choice of algorithm implemented , cross validation is not necessary. For further details on why cross validation is not necessary visit the link
+<http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#ooberr>
+
+Each tree is trained on about 2/3 of the total training data. As the forest is built, each tree can thus be tested (similar to leave one out cross validation) on the samples not used in building that tree
+
+During the fitting process the out-of-bag error for each data point is recorded and averaged over the forest 
+
+Note: train data size is intentionally kept small for faster calculations. the confusion matrix for p=.6 gives the below result.
+
+Confusion Matrix and Statistics
+
+          Reference
+Prediction    A    B    C    D    E
+         A 2229    1    2    0    0
+         B   16 1497    4    1    0
+         C    0   20 1344    4    0
+         D    0    1   20 1265    0
+         E    0    1    4    4 1433
+
+Overall Statistics
+
+               Accuracy : 0.9901
+                 95% CI : (0.9876, 0.9921)
+    No Information Rate : 0.2861
+    P-Value [Acc > NIR] : < 2.2e-16
+
+                  Kappa : 0.9874
+ Mcnemar's Test P-Value : NA
+
+Statistics by Class:
+
+                     Class: A Class: B Class: C Class: D Class: E
+
+Sensitivity            0.9929   0.9849   0.9782   0.9929   1.0000
+Specificity            0.9995   0.9967   0.9963   0.9968   0.9986
+Pos Pred Value         0.9987   0.9862   0.9825   0.9837   0.9938
+Neg Pred Value         0.9971   0.9964   0.9954   0.9986   1.0000
+Prevalence             0.2861   0.1937   0.1751   0.1624   0.1826
+Detection Rate         0.2841   0.1908   0.1713   0.1612   0.1826
+Detection Prevalence   0.2845   0.1935   0.1744   0.1639   0.1838
+Balanced Accuracy      0.9962   0.9908   0.9872   0.9949   0.9993
+
+As can be seen the accuracy is very high at 99%, This model was used to generate the output on the test data set, the prediction was 100%, thus validating that it works on generalised data 
+sets without any bias.
+
+Below plot shows the model plot, indicating accuracy vs predictors trade off
+```{r}
+plot(model)
+```
+
+Step 3:
+---
+Load the test data set, perform the same data processing that was done on the training set. apply the model created in step2 to get the predicted values
+
+```{r}
+testing <- read.csv("pml-testing.csv", na.strings = c("NA","#DIV/0!",""))
+testing <- testing[, which(as.numeric(colSums(is.na(testing)))==0)]
+testSubSet <- testing[,9:ncol(testing)-1]
+testSubSet$classe <- predict(model,testSubSet)
+testSubSet$classe 
+```
